@@ -1,33 +1,33 @@
-name: 📺 تحديث بث النهار TV
+name: 📺 Update Ennahar TV
 on:
   schedule:
-    - cron: '0 */3 * * *' # تشغيل كل 3 ساعات
-  workflow_dispatch: # تشغيل يدوي
-
-permissions:
-  contents: write
+    - cron: '0 */3 * * *'
+  workflow_dispatch:
 
 jobs:
-  update-ennahar:
+  build:
     runs-on: ubuntu-latest
     steps:
-      - name: 📥 استنساخ المستودع
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: 🐍 إعداد بايثون
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      - name: 📦 تثبيت المكتبات
+      - name: Install dependencies
         run: pip install requests
 
-      - name: 🚀 تشغيل القناص
-        run: python ennahar_extractor.py
-
-      - name: 🔄 رفع التحديثات إلى GitHub
+      - name: Run extractor
         run: |
-          git config --global user.name "Ennahar Bot"
-          git config --global user.email "bot@ennahar.dz"
+          mkdir -p results
+          python ennahar_extractor.py
+
+      - name: Commit and Push
+        run: |
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
           git add results/*
-          git diff --quiet && git diff --staged --quiet || (git commit -m "🔄 تحديث آلي لرابط النهار [$(date)]" && git push)
+          git commit -m "Update Stream $(date)" || echo "No changes to commit"
+          git push
