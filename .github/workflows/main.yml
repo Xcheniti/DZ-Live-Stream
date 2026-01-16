@@ -2,14 +2,14 @@ name: Ennahar Token Auto-Update
 
 on:
   schedule:
-    - cron: '0 * * * *' # يعمل كل رأس ساعة
+    - cron: '0 * * * *' # يعمل تلقائياً كل ساعة
   workflow_dispatch: # يسمح لك بتشغيله يدوياً للتجربة
 
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # ضروري للسماح للأكشن برفع الملف المحدث
+      contents: write # ضروري جداً لتجاوز خطأ 128
 
     steps:
       - name: Checkout code
@@ -22,16 +22,18 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install playwright requests
+          pip install playwright
           playwright install chromium
 
       - name: Run Extractor
         run: python extractor.py
 
       - name: Commit and Push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           git add results/ennahar.m3u
-          git commit -m "Update Ennahar Live Link" || echo "No changes to commit"
-          git push
+          # التحقق من وجود تغييرات لتجنب الأخطاء إذا كان الرابط لم يتغير
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Update Ennahar Token" && git push)
