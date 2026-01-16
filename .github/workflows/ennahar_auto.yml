@@ -1,49 +1,37 @@
-name: 📺 Ennahar TV Auto-Updater
+name: Ennahar Token Auto-Update
 
 on:
   schedule:
-    # التحديث كل 6 ساعات (كافٍ جداً لأن التوكن لا يتغير بسرعة كما لاحظت)
-    - cron: '0 */6 * * *'
-  workflow_dispatch: # زر التشغيل اليدوي للتجربة فوراً
-
-permissions:
-  contents: write # صلاحية أساسية للسماح للبوت بكتابة ملف الـ M3U
+    - cron: '0 * * * *' # يعمل كل رأس ساعة
+  workflow_dispatch: # يسمح لك بتشغيله يدوياً للتجربة
 
 jobs:
-  update_stream:
+  build:
     runs-on: ubuntu-latest
-    
+    permissions:
+      contents: write # ضروري للسماح للأكشن برفع الملف المحدث
+
     steps:
-      - name: 📥 سحب الملفات من المستودع
-        uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-      - name: 🐍 تجهيز بيئة بايثون
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
-          python-version: '3.10'
+          python-version: '3.9'
 
-      - name: 📦 تثبيت المكتبات اللازمة
+      - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install requests
+          pip install playwright requests
+          playwright install chromium
 
-      - name: 🚀 تشغيل قناص النهار (السكريبت)
-        run: |
-          # السكريبت نفسه سيقوم بإنشاء مجلد results إذا لم يجدوه
-          python ennahar_extractor.py
+      - name: Run Extractor
+        run: python extractor.py
 
-      - name: 📤 رفع الرابط الجديد إلى GitHub
+      - name: Commit and Push
         run: |
-          git config --global user.name "GitHub Action Bot"
-          git config --global user.email "actions@github.com"
-          
-          # إضافة المجلد الذي يحتوي على النتائج
-          git add results/
-          
-          # التحقق مما إذا كان هناك تغيير حقيقي في الرابط قبل الرفع
-          if git diff --staged --quiet; then
-            echo "✅ لا يوجد تغيير في التوكن حالياً، الرابط ما زال مستقراً."
-          else
-            git commit -m "🔄 تحديث تلقائي: تم قنص توكن جديد [$(date -u +'%Y-%m-%d %H:%M:%S') UTC]"
-            git push
-          fi
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add results/ennahar.m3u
+          git commit -m "Update Ennahar Live Link" || echo "No changes to commit"
+          git push
