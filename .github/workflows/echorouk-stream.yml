@@ -1,42 +1,133 @@
-name: Extract Echorouk Live Stream
+name: 🎥 مستخرج بث الشروق نيوز الآلي
 on:
-  schedule:
-    # تشغيل كل 6 ساعات تلقائياً
-    - cron: '0 */6 * * *'
   workflow_dispatch:  # تشغيل يدوي
+  schedule:
+    # تشغيل كل 3 ساعات (0,3,6,9,12,15,18,21)
+    - cron: '0 */3 * * *'
   push:
-    branches: [ main ]
+    branches: [ main, master ]
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "echorouk-${{ github.ref }}"
+  cancel-in-progress: false
 
 jobs:
   extract-stream:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
-      
-    - name: Set up Python
-      uses: actions/setup-python@v4
+    - name: 📥 استنساخ المستودع
+      uses: actions/checkout@v4
       with:
-        python-version: '3.10'
-        
-    - name: Install dependencies
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: 🐍 إعداد بيئة Python 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+        cache-dependency-path: '**/requirements.txt'
+    
+    - name: 📦 تثبيت الاعتمادات
       run: |
-        pip install --upgrade pip
-        pip install requests beautifulsoup4 yt-dlp cloudscraper lxml
-        
-    - name: Run stream extractor
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt --no-cache-dir
+        pip install git+https://github.com/yt-dlp/yt-dlp.git@master
+    
+    - name: 🔍 تشغيل المستخرج المتقدم
       id: extract
       run: |
-        python echorouk_extractor.py
-        echo "M3U_CONTENT<<EOF" >> $GITHUB_OUTPUT
-        cat echorouk_news.m3u >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
+        echo "⏰ وقت البدء: $(date '+%Y-%m-%d %H:%M:%S')"
+        echo "🔄 بدء عملية الاستخراج..."
         
-    - name: Commit and push if changed
+        # تشغيل المستخرج مع معالجة الأخطاء
+        python echorouk_super_extractor.py 2>&1 | tee extraction.log
+        
+        # التحقق من النتائج
+        if [ -f "results/extraction_status.json" ]; then
+          STATUS=$(python -c "import json; print(json.load(open('results/extraction_status.json'))['status'])")
+          URL=$(python -c "import json; print(json.load(open('results/extraction_status.json'))['best_url'][:100] if 'best_url' in json.load(open('results/extraction_status.json')) else '')")
+          
+          echo "status=$STATUS" >> $GITHUB_OUTPUT
+          echo "stream_url=$URL" >> $GITHUB_OUTPUT
+          echo "timestamp=$(date -Iseconds)" >> $GITHUB_OUTPUT
+        else
+          echo "status=failed" >> $GITHUB_OUTPUT
+          exit 1
+        fi
+        
+        echo "✅ عملية الاستخراج اكتملت"
+    
+    - name: 📊 تحليل ورفع النتائج
+      if: steps.extract.outputs.status == 'success'
+      uses: actions/upload-artifact@v4
+      with:
+        name: echorouk-stream-results
+        path: |
+          results/
+          logs/
+          *.m3u
+          *.json
+        retention-days: 30
+    
+    - name: 📝 تحديث المستودع تلقائياً
+      if: steps.extract.outputs.status == 'success'
       run: |
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
-        git add echorouk_news.m3u README.md
-        git diff --quiet && git diff --staged --quiet || git commit -m "🔄 Update Echorouk stream URL [$(date +'%Y-%m-%d %H:%M')]"
-        git push
+        git config --global user.name "GitHub Actions Bot"
+        git config --global user.email "actions@github.com"
+        git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+        
+        # التحقق من التغييرات
+        git add -A
+        git diff --cached --quiet || {
+          git commit -m "🔄 تحديث آلي للبث [${{ steps.extract.outputs.timestamp }}]
+          
+          • تم استخراج رابط جديد للبث
+          • الوقت: $(date '+%Y-%m-%d %H:%M:%S')
+          • الحالة: ${{ steps.extract.outputs.status }}"
+          
+          git pull --rebase origin ${{ github.ref_name }}
+          git push origin ${{ github.ref_name }}
+          echo "✅ تم تحديث المستودع بنجاح"
+        } || echo "ℹ️ لا توجد تغييرات للتحديث"
+    
+    - name: 📢 إشعار النجاح
+      if: success()
+      uses: rjstone/discord-webhook-notify@v1
+      with:
+        webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
+        severity: info
+        details: |
+          ✅ **تحديث بث الشروق نيوز بنجاح**
+          **الوقت:** ${{ steps.extract.outputs.timestamp }}
+          **الحالة:** ${{ steps.extract.outputs.status }}
+          [عرض المستودع](https://github.com/${{ github.repository }})
+    
+    - name: 📢 إشعار الفشل
+      if: failure()
+      uses: rjstone/discord-webhook-notify@v1
+      with:
+        webhookUrl: ${{ secrets.DISCORD_WEBHOOK }}
+        severity: error
+        details: |
+          ❌ **فشل تحديث بث الشروق نيوز**
+          **الوقت:** ${{ steps.extract.outputs.timestamp }}
+          **المستودع:** ${{ github.repository }}
+          [عرض السجلات](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+    
+    - name: 🚀 نشر على GitHub Pages
+      if: success() && github.ref == 'refs/heads/main'
+      uses: peaceiris/actions-gh-pages@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./results
+        publish_branch: gh-pages
+        keep_files: false
+        force_orphan: true
