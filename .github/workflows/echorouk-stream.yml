@@ -1,8 +1,11 @@
 name: 📺 Update Ennahar TV
 on:
   schedule:
-    - cron: '0 */3 * * *'
-  workflow_dispatch:
+    - cron: '0 */3 * * *' # تحديث كل 3 ساعات
+  workflow_dispatch: # إمكانية التشغيل اليدوي
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -21,7 +24,7 @@ jobs:
 
       - name: Run extractor
         run: |
-          mkdir -p results
+          mkdir -p results # حل مشكلة Exit Code 2 عبر إنشاء المجلد مسبقاً
           python ennahar_extractor.py
 
       - name: Commit and Push
@@ -29,5 +32,5 @@ jobs:
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
           git add results/*
-          git commit -m "Update Stream $(date)" || echo "No changes to commit"
+          git commit -m "🔄 تحديث رابط النهار آلياً [$(date)]" || echo "لا توجد تغييرات للرفع"
           git push
