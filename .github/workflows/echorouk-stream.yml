@@ -1,111 +1,66 @@
-name: 🎥 Echorouk Live Stream Extractor
+name: 📡 Echorouk Stream Extractor
 
 on:
-  workflow_dispatch:  # تشغيل يدوي
+  workflow_dispatch:
   schedule:
-    # تشغيل كل 4 ساعات (0, 4, 8, 12, 16, 20)
-    - cron: '0 */4 * * *'
+    - cron: '0 */6 * * *'
   push:
-    branches: [ main, master ]
-
-env:
-  PYTHON_VERSION: '3.11'
+    branches: [ main ]
 
 jobs:
   extract-stream:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
     
     steps:
-    - name: 📥 Checkout repository
+    - name: 📥 Checkout code
       uses: actions/checkout@v4
-      with:
-        fetch-depth: 1
     
-    - name: 🐍 Setup Python ${{ env.PYTHON_VERSION }}
-      uses: actions/setup-python@v5
+    - name: 🐍 Setup Python
+      uses: actions/setup-python@v4
       with:
-        python-version: ${{ env.PYTHON_VERSION }}
-        cache: 'pip'
+        python-version: '3.10'
     
     - name: 📦 Install dependencies
       run: |
-        python -m pip install --upgrade pip
-        pip install requests==2.31.0 beautifulsoup4==4.12.2 lxml==4.9.3
-        pip install yt-dlp==2023.11.16 --no-deps
+        pip install requests --no-cache-dir
     
-    - name: 🔍 Run Stream Extractor
-      id: extractor
+    - name: 🔍 Run extractor
+      id: extract
       run: |
-        echo "=== STARTING EXTRACTION ==="
-        echo "Time: $(date)"
+        echo "Starting extraction at $(date)"
         
-        # إنشاء مجلدات النتائج
-        mkdir -p results logs
+        # إنشاء المجلدات المطلوبة أولاً
+        mkdir -p results
+        mkdir -p logs
         
-        # تشغيل المستخرج مع معالجة الأخطاء
-        python extractor.py
+        # تشغيل الكود
+        python echorouk_extractor.py
         
-        # قراءة النتائج
-        if [ -f "results/status.json" ]; then
-          STATUS=$(python -c "import json; print(json.load(open('results/status.json'))['status'])")
-          URL=$(python -c "import json; print(json.load(open('results/status.json')).get('best_url', ''))")
-          
-          echo "status=$STATUS" >> $GITHUB_OUTPUT
-          echo "stream_url=$URL" >> $GITHUB_OUTPUT
-          echo "timestamp=$(date -Iseconds)" >> $GITHUB_OUTPUT
+        # التحقق من النتائج
+        if [ -f "results/echorouk.m3u" ]; then
+          echo "status=success" >> $GITHUB_OUTPUT
+          echo "has_file=true" >> $GITHUB_OUTPUT
         else
-          echo "status=error" >> $GITHUB_OUTPUT
-          echo "stream_url=" >> $GITHUB_OUTPUT
+          echo "status=partial" >> $GITHUB_OUTPUT
+          echo "has_file=false" >> $GITHUB_OUTPUT
         fi
         
-        echo "=== EXTRACTION COMPLETE ==="
+        echo "Extraction finished at $(date)"
     
-    - name: 📊 Upload Results
-      if: always()
+    - name: 📤 Upload results
       uses: actions/upload-artifact@v4
       with:
-        name: stream-results
+        name: echorouk-stream
         path: |
           results/
           logs/
-        retention-days: 7
+        retention-days: 3
     
-    - name: 📝 Auto Commit Results
-      if: steps.extractor.outputs.status == 'success'
+    - name: 📝 Display results
       run: |
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
-        
-        # التحقق من التغييرات
-        git add results/ || echo "No results to add"
-        git add logs/ || echo "No logs to add"
-        
-        # Commit فقط إذا كان هناك تغييرات
-        git diff --staged --quiet || {
-          git commit -m "🔄 Auto-update: $(date '+%Y-%m-%d %H:%M')
-          
-          Status: ${{ steps.extractor.outputs.status }}
-          Stream URL: ${{ steps.extractor.outputs.stream_url }}
-          "
-          
-          git push
-          echo "✅ Successfully committed and pushed"
-        } || echo "ℹ️ No changes to commit"
-    
-    - name: 🎉 Success Notification
-      if: success()
-      run: |
-        echo "========================================"
-        echo "✅ EXTRACTION SUCCESSFUL"
-        echo "Time: ${{ steps.extractor.outputs.timestamp }}"
-        echo "Status: ${{ steps.extractor.outputs.status }}"
-        echo "========================================"
-    
-    - name: ⚠️ Failure Notification
-      if: failure()
-      run: |
-        echo "========================================"
-        echo "❌ EXTRACTION FAILED"
-        echo "Check logs for details"
-        echo "========================================"
+        echo "=== EXTRACTION RESULTS ==="
+        echo "Status: ${{ steps.extract.outputs.status }}"
+        echo "Has M3U file: ${{ steps.extract.outputs.has_file }}"
+        ls -la results/ || echo "No results directory"
+        echo "=========================="
