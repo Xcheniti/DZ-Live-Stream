@@ -1,6 +1,3 @@
 #EXTM3U
-#EXTINF:-1, Echorouk News
-https://all-dz-news.pages.dev/streams/echorouk_news.m3u8
-
-#EXTINF:-1, Echorouk TV
-https://all-dz-news.pages.dev/streams/echorouk_tv.m3u8
+#EXTINF:-1, Echorouk News HD [Live 2026]
+https://shls-echorouk-news.v7.vcloud.dz/echorouk_news/index.m3u8|User-Agent=Mozilla/5.0
