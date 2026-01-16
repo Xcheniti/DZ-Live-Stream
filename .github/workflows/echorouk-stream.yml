@@ -1,66 +1,33 @@
-name: 📡 Echorouk Stream Extractor
-
+name: 📺 تحديث بث النهار TV
 on:
-  workflow_dispatch:
   schedule:
-    - cron: '0 */6 * * *'
-  push:
-    branches: [ main ]
+    - cron: '0 */3 * * *' # تشغيل كل 3 ساعات
+  workflow_dispatch: # تشغيل يدوي
+
+permissions:
+  contents: write
 
 jobs:
-  extract-stream:
+  update-ennahar:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
-    
     steps:
-    - name: 📥 Checkout code
-      uses: actions/checkout@v4
-    
-    - name: 🐍 Setup Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
-    
-    - name: 📦 Install dependencies
-      run: |
-        pip install requests --no-cache-dir
-    
-    - name: 🔍 Run extractor
-      id: extract
-      run: |
-        echo "Starting extraction at $(date)"
-        
-        # إنشاء المجلدات المطلوبة أولاً
-        mkdir -p results
-        mkdir -p logs
-        
-        # تشغيل الكود
-        python echorouk_extractor.py
-        
-        # التحقق من النتائج
-        if [ -f "results/echorouk.m3u" ]; then
-          echo "status=success" >> $GITHUB_OUTPUT
-          echo "has_file=true" >> $GITHUB_OUTPUT
-        else
-          echo "status=partial" >> $GITHUB_OUTPUT
-          echo "has_file=false" >> $GITHUB_OUTPUT
-        fi
-        
-        echo "Extraction finished at $(date)"
-    
-    - name: 📤 Upload results
-      uses: actions/upload-artifact@v4
-      with:
-        name: echorouk-stream
-        path: |
-          results/
-          logs/
-        retention-days: 3
-    
-    - name: 📝 Display results
-      run: |
-        echo "=== EXTRACTION RESULTS ==="
-        echo "Status: ${{ steps.extract.outputs.status }}"
-        echo "Has M3U file: ${{ steps.extract.outputs.has_file }}"
-        ls -la results/ || echo "No results directory"
-        echo "=========================="
+      - name: 📥 استنساخ المستودع
+        uses: actions/checkout@v4
+
+      - name: 🐍 إعداد بايثون
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: 📦 تثبيت المكتبات
+        run: pip install requests
+
+      - name: 🚀 تشغيل القناص
+        run: python ennahar_extractor.py
+
+      - name: 🔄 رفع التحديثات إلى GitHub
+        run: |
+          git config --global user.name "Ennahar Bot"
+          git config --global user.email "bot@ennahar.dz"
+          git add results/*
+          git diff --quiet && git diff --staged --quiet || (git commit -m "🔄 تحديث آلي لرابط النهار [$(date)]" && git push)
