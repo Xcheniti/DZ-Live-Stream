@@ -1,0 +1,49 @@
+name: 📺 Ennahar TV Auto-Updater
+
+on:
+  schedule:
+    # التحديث كل 6 ساعات (كافٍ جداً لأن التوكن لا يتغير بسرعة كما لاحظت)
+    - cron: '0 */6 * * *'
+  workflow_dispatch: # زر التشغيل اليدوي للتجربة فوراً
+
+permissions:
+  contents: write # صلاحية أساسية للسماح للبوت بكتابة ملف الـ M3U
+
+jobs:
+  update_stream:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 سحب الملفات من المستودع
+        uses: actions/checkout@v4
+
+      - name: 🐍 تجهيز بيئة بايثون
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: 📦 تثبيت المكتبات اللازمة
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+
+      - name: 🚀 تشغيل قناص النهار (السكريبت)
+        run: |
+          # السكريبت نفسه سيقوم بإنشاء مجلد results إذا لم يجدوه
+          python ennahar_extractor.py
+
+      - name: 📤 رفع الرابط الجديد إلى GitHub
+        run: |
+          git config --global user.name "GitHub Action Bot"
+          git config --global user.email "actions@github.com"
+          
+          # إضافة المجلد الذي يحتوي على النتائج
+          git add results/
+          
+          # التحقق مما إذا كان هناك تغيير حقيقي في الرابط قبل الرفع
+          if git diff --staged --quiet; then
+            echo "✅ لا يوجد تغيير في التوكن حالياً، الرابط ما زال مستقراً."
+          else
+            git commit -m "🔄 تحديث تلقائي: تم قنص توكن جديد [$(date -u +'%Y-%m-%d %H:%M:%S') UTC]"
+            git push
+          fi
